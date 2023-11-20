@@ -1,51 +1,35 @@
-name: Update dist files on main branch
-
+name: AWS example workflow
 on:
   push:
     branches:
       - main
-    paths-ignore:
-      - 'dist/**'
-  workflow_dispatch:
+env:
+  BUCKET_NAME: "foodimagekarl"
+  AWS_REGION: "us-east-1"
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
-  package:
-    name: Package dist files
+  S3PackageUpload:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-          ref: ${{ github.ref_name }}
-          persist-credentials: false
-      - name: Package
-        run: |
-          npm ci
-          npm test
-          npm run package
+      - name: Git clone the repository
+        uses: actions/checkout@v4
+
+      - name: Show AWS CLI version
+        run: aws --version
+
+      - name: List files in the current directory
+        run: ls -la
+
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v4.0.1
         with:
-          aws-region: us-west-2
-          role-to-assume: ${{ secrets.SECRETS_AWS_PACKAGING_ROLE_TO_ASSUME }}
-          role-duration-seconds: 900
-          role-session-name: SecretsManagerFetch
-      - name: Get bot user token
-        uses: aws-actions/aws-secretsmanager-get-secrets@v1
-        with:
-          parse-json-secrets: true
-          secret-ids: |
-            OSDS,arn:aws:secretsmanager:us-west-2:206735643321:secret:github-aws-sdk-osds-automation-gebs9n
-      - name: Commit
+          role-to-assume: arn:aws:iam::821238824534:role/github
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Copy index.html to S3
         run: |
-          echo "::add-mask::${{ env.OSDS_ACCESS_TOKEN }}"
-          git config user.name "GitHub Actions"
-          git config user.email "github-aws-sdk-osds-automation@amazon.com"
-          git remote set-url origin https://${{ env.OSDS_ACCESS_TOKEN }}@github.com/aws-actions/configure-aws-credentials.git
-          git add dist
-          git commit -m "chore: Update dist" || echo "No changes to commit"
-          git push origin
+          aws s3 cp ./index.html s3://${{ env.BUCKET_NAME }}
